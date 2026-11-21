@@ -93,62 +93,71 @@ for column, example in zip(example_columns, examples):
     if column.button(example, use_container_width=True):
         st.session_state["search_query"] = example
 
-with st.form("semantic-search", clear_on_submit=False):
-    query_column, count_column = st.columns([5, 1])
-    with query_column:
-        query = st.text_input(
-            "Search the news",
-            placeholder="e.g. new treatments for a disease",
-            key="search_query",
-        )
-    with count_column:
-        result_count = st.select_slider(
-            "Results",
-            options=list(range(1, 11)),
-            value=5,
-        )
-    submitted = st.form_submit_button("Search", type="primary", use_container_width=True)
+query_column, count_column = st.columns([5, 1.5])
+with query_column:
+    with st.form("semantic-search", clear_on_submit=False):
+        input_column, submit_column = st.columns([5, 1])
+        with input_column:
+            query = st.text_input(
+                "Search the news",
+                placeholder="e.g. new treatments for a disease",
+                key="search_query",
+            )
+        with submit_column:
+            submitted = st.form_submit_button("Search", type="primary", use_container_width=True)
+
+with count_column:
+    result_count = st.select_slider(
+        "Results",
+        options=list(range(1, 11)),
+        value=5,
+        key="result_count",
+    )
 
 if submitted:
-    if not query.strip():
-        st.info("Enter a search phrase to find related articles.")
-    else:
-        try:
-            with st.spinner(
-                "First search: downloading AG News and MiniLM, then building the vector index. "
-                "This can take a few minutes."
-            ):
-                engine = get_engine(
-                    configured_dataset_limit(),
-                    os.getenv("CHROMA_DB_DIR", "chroma_db"),
-                )
-            with st.spinner("Finding related articles..."):
-                matches = engine.search(query, int(result_count))
+    st.session_state["submitted_query"] = query.strip()
 
-            st.caption(
-                f"Showing {len(matches)} of {engine.indexed_chunks:,} indexed text chunks "
-                f"from {engine.article_count:,} AG News articles."
+submitted_query = st.session_state.get("submitted_query", "")
+if submitted and not submitted_query:
+    st.info("Enter a search phrase to find related articles.")
+elif submitted_query:
+    try:
+        with st.spinner(
+            "First search: downloading AG News and MiniLM, then building the vector index. "
+            "This can take a few minutes."
+        ):
+            engine = get_engine(
+                configured_dataset_limit(),
+                os.getenv("CHROMA_DB_DIR", "chroma_db"),
             )
-            if not matches:
-                st.info("No matches found. Try a broader topic or different phrasing.")
-            for match in matches:
-                category = str(match["category"]).replace("<", "&lt;").replace(">", "&gt;")
-                text = str(match["text"]).replace("<", "&lt;").replace(">", "&gt;")
-                article_id = int(match["article_id"]) + 1
-                score = float(match["similarity"]) * 100
-                st.markdown(
-                    f"""
-                    <article class="result-card">
-                      <div class="result-meta">
-                        <span class="result-category">{category} · Article {article_id}</span>
-                        <span class="result-score">{score:.1f}% match</span>
-                      </div>
-                      <div class="result-text">{text}</div>
-                    </article>
-                    """,
-                    unsafe_allow_html=True,
-                )
-        except Exception as error:
-            st.error(f"Search setup failed: {error}")
+        with st.spinner("Finding related articles..."):
+            matches = engine.search(submitted_query, int(result_count))
+
+        st.caption(
+            f"Showing the top {len(matches)} of {engine.indexed_chunks:,} text chunks "
+            f"from {engine.article_count:,} AG News articles. Match percentages are "
+            "based on similarity to your search phrase."
+        )
+        if not matches:
+            st.info("No matches found. Try a broader topic or different phrasing.")
+        for match in matches:
+            category = str(match["category"]).replace("<", "&lt;").replace(">", "&gt;")
+            text = str(match["text"]).replace("<", "&lt;").replace(">", "&gt;")
+            article_id = int(match["article_id"]) + 1
+            score = float(match["similarity"]) * 100
+            st.markdown(
+                f"""
+                <article class="result-card">
+                  <div class="result-meta">
+                    <span class="result-category">{category} · Article {article_id}</span>
+                    <span class="result-score">{score:.1f}% match</span>
+                  </div>
+                  <div class="result-text">{text}</div>
+                </article>
+                """,
+                unsafe_allow_html=True,
+            )
+    except Exception as error:
+        st.error(f"Search setup failed: {error}")
 else:
-    st.caption("The search index initializes the first time you submit a query.")
+    st.caption("Submit a search phrase to find related articles.")
