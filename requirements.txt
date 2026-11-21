@@ -1,5 +1,4 @@
 chromadb>=0.5,<2
 datasets>=3.0,<5
 fastembed>=0.7,<1
-numpy<2
 streamlit>=1.40,<2
