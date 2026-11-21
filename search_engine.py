@@ -11,6 +11,17 @@ DATASET_ID = "fancyzhx/ag_news"
 MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "ag_news_articles"
 CATEGORY_NAMES = ("World", "Sports", "Business", "Sci/Tech")
+MIN_RELEVANCE_SCORE = 0.10
+MAX_RELEVANCE_SCORE = 0.38
+
+
+def relevance_threshold(level: int) -> float:
+    """Map the 0-10 relevance control to a cosine-similarity cutoff."""
+    level = int(level)
+    if not 0 <= level <= 10:
+        raise ValueError("relevance level must be between zero and ten")
+    threshold = MIN_RELEVANCE_SCORE + (MAX_RELEVANCE_SCORE - MIN_RELEVANCE_SCORE) * level / 10
+    return round(threshold, 3)
 
 
 def chunk_text(text: str, chunk_size: int = 180, overlap: int = 30) -> list[str]:
@@ -115,16 +126,16 @@ class SemanticSearchEngine:
 
         self.collection = collection
 
-    def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
-        """Return the closest matching text chunks and their metadata."""
+    def search(self, query: str, relevance: int = 5) -> list[dict[str, Any]]:
+        """Return every indexed chunk that meets the selected relevance cutoff."""
         if not query.strip():
             return []
 
-        limit = max(1, min(int(limit), 20))
+        threshold = relevance_threshold(relevance)
         query_embedding = next(self.model.embed([query])).tolist()
         matches = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=min(limit, self.indexed_chunks),
+            n_results=self.indexed_chunks,
             include=["documents", "metadatas", "distances"],
         )
 
@@ -134,12 +145,15 @@ class SemanticSearchEngine:
             matches["metadatas"][0],
             matches["distances"][0],
         ):
+            similarity = max(0.0, min(1.0, 1.0 - float(distance)))
+            if similarity < threshold:
+                continue
             results.append(
                 {
                     "text": document,
                     "category": metadata["category"],
                     "article_id": metadata["article_id"],
-                    "similarity": max(0.0, min(1.0, 1.0 - float(distance))),
+                    "similarity": similarity,
                 }
             )
         return results

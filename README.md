@@ -1,6 +1,6 @@
 # Signal: Semantic Search
 
-A Streamlit semantic-search app over the [AG News dataset](https://huggingface.co/datasets/fancyzhx/ag_news). It loads a configurable subset of the training split, chunks each article, embeds chunks with FastEmbed's ONNX Runtime backend using `sentence-transformers/all-MiniLM-L6-v2`, and indexes them in ChromaDB with cosine distance. Search results show the matching text, category, source article number, and similarity score.
+A Streamlit semantic-search app over the [AG News dataset](https://huggingface.co/datasets/fancyzhx/ag_news). It loads a configurable subset of the training split, chunks each article, embeds chunks with FastEmbed's ONNX Runtime backend using `sentence-transformers/all-MiniLM-L6-v2`, and indexes them in ChromaDB with cosine distance. The 0–10 relevance control filters all indexed chunks by query similarity: lower values include looser matches, while higher values return only closer matches. Each result links to its source row in the dataset viewer.
 
 ## Run locally
 
@@ -11,7 +11,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit, usually `http://localhost:8501`. The first search downloads the dataset and embedding model, then builds the Chroma index; the app displays a progress message during that first setup. The default corpus is 500 articles. Set `DATASET_LIMIT` to change it or `CHROMA_DB_DIR` to change the local index directory.
+Open the local URL printed by Streamlit, usually `http://localhost:8501`. The first search downloads the dataset and embedding model, then builds the Chroma index; the app displays a progress message during that first setup. After submitting a query, adjust the relevance control to immediately refresh matching results. The default corpus is 500 articles. Set `DATASET_LIMIT` to change it or `CHROMA_DB_DIR` to change the local index directory.
 
 Run the focused chunking tests with:
 
@@ -35,5 +35,3 @@ No secrets or API keys are required. Streamlit Community Cloud's local filesyste
 - Dataset: `fancyzhx/ag_news` from Hugging Face Datasets, using its `train` split.
 - Embedding model: `sentence-transformers/all-MiniLM-L6-v2`, run with FastEmbed and ONNX Runtime.
 - Vector store: ChromaDB with cosine distance.
-
-The source dataset and model are downloaded at runtime and are not bundled in this repository. Review their dataset cards and terms before using this app beyond a class demonstration.

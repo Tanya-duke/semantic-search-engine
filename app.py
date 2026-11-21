@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import os
+import html
 
 import streamlit as st
 
-from search_engine import SemanticSearchEngine, configured_dataset_limit
+from search_engine import (
+    SemanticSearchEngine,
+    configured_dataset_limit,
+    relevance_threshold,
+)
 
 
 st.set_page_config(
@@ -61,7 +66,8 @@ st.markdown(
         [data-testid="stSlider"] [data-testid="stMarkdownContainer"] p { color: var(--ink) !important; }
     .result-card { margin: 12px 0; padding: 16px 18px; background: #fff; border: 1px solid #dce3de; border-left: 4px solid var(--green); border-radius: 4px; }
     .result-meta { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
-    .result-category { color: var(--green); font: 500 11px/1.3 'DM Mono', monospace; text-transform: uppercase; }
+    .result-source { color: var(--green) !important; font: 500 11px/1.3 'DM Mono', monospace; text-transform: uppercase; text-decoration: none; }
+    .result-source:hover { text-decoration: underline; }
     .result-score { color: var(--muted); font: 400 12px/1.3 'DM Mono', monospace; white-space: nowrap; }
     .result-text { color: #27332f; font-size: 14px; line-height: 1.65; }
     @media (max-width: 640px) { .hero h1 { font-size: 34px; } .result-card { padding: 14px; } }
@@ -93,7 +99,7 @@ for column, example in zip(example_columns, examples):
     if column.button(example, use_container_width=True):
         st.session_state["search_query"] = example
 
-query_column, count_column = st.columns([5, 1.5])
+query_column, relevance_column = st.columns([5, 1.5])
 with query_column:
     with st.form("semantic-search", clear_on_submit=False):
         input_column, submit_column = st.columns([5, 1])
@@ -106,13 +112,16 @@ with query_column:
         with submit_column:
             submitted = st.form_submit_button("Search", type="primary", use_container_width=True)
 
-with count_column:
-    result_count = st.select_slider(
-        "Results",
-        options=list(range(1, 11)),
+with relevance_column:
+    relevance = st.slider(
+        "Relevance",
+        min_value=0,
+        max_value=10,
         value=5,
-        key="result_count",
+        step=1,
+        key="relevance_level",
     )
+    st.caption("0 broad · 10 strict")
 
 if submitted:
     st.session_state["submitted_query"] = query.strip()
@@ -131,25 +140,30 @@ elif submitted_query:
                 os.getenv("CHROMA_DB_DIR", "chroma_db"),
             )
         with st.spinner("Finding related articles..."):
-            matches = engine.search(submitted_query, int(result_count))
+            threshold = relevance_threshold(relevance)
+            matches = engine.search(submitted_query, int(relevance))
 
         st.caption(
-            f"Showing the top {len(matches)} of {engine.indexed_chunks:,} text chunks "
-            f"from {engine.article_count:,} AG News articles. Match percentages are "
-            "based on similarity to your search phrase."
+            f"{len(matches):,} matches above {threshold:.0%} similarity "
+            f"({relevance}/10) from {engine.indexed_chunks:,} indexed text chunks."
         )
         if not matches:
-            st.info("No matches found. Try a broader topic or different phrasing.")
+            st.info("No matches meet this relevance level. Move the control toward 0 for broader results.")
         for match in matches:
-            category = str(match["category"]).replace("<", "&lt;").replace(">", "&gt;")
-            text = str(match["text"]).replace("<", "&lt;").replace(">", "&gt;")
-            article_id = int(match["article_id"]) + 1
+            category = html.escape(str(match["category"]))
+            text = html.escape(str(match["text"]))
+            article_index = int(match["article_id"])
+            article_id = article_index + 1
+            source_url = (
+                "https://huggingface.co/datasets/fancyzhx/ag_news/viewer/default/train"
+                f"?row={article_index}"
+            )
             score = float(match["similarity"]) * 100
             st.markdown(
                 f"""
                 <article class="result-card">
                   <div class="result-meta">
-                    <span class="result-category">{category} · Article {article_id}</span>
+                    <a class="result-source" href="{source_url}" target="_blank" rel="noopener noreferrer">{category} · Article {article_id} ↗</a>
                     <span class="result-score">{score:.1f}% match</span>
                   </div>
                   <div class="result-text">{text}</div>
