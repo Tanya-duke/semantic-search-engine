@@ -13,6 +13,8 @@ from search_engine import (
     relevance_threshold,
 )
 
+ENGINE_CACHE_VERSION = "relevance-threshold-v1"
+
 
 st.set_page_config(
     page_title="Signal | Semantic Search",
@@ -83,7 +85,7 @@ st.markdown(
 
 
 @st.cache_resource(show_spinner=False)
-def get_engine(dataset_limit: int, db_path: str) -> SemanticSearchEngine:
+def get_engine(dataset_limit: int, db_path: str, cache_version: str) -> SemanticSearchEngine:
     return SemanticSearchEngine(dataset_limit=dataset_limit, db_path=db_path)
 
 
@@ -138,6 +140,7 @@ elif submitted_query:
             engine = get_engine(
                 configured_dataset_limit(),
                 os.getenv("CHROMA_DB_DIR", "chroma_db"),
+                ENGINE_CACHE_VERSION,
             )
         with st.spinner("Finding related articles..."):
             threshold = relevance_threshold(relevance)
